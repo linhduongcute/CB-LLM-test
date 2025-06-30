@@ -3,12 +3,13 @@ import os
 import torch
 import torch.nn.functional as F
 import numpy as np
-from transformers import RobertaTokenizerFast, RobertaModel, GPT2TokenizerFast, GPT2Model
+from transformers import RobertaTokenizerFast, RobertaModel, GPT2TokenizerFast, GPT2Model, AutoTokenizer, AutoModel
 from datasets import load_dataset
 import evaluate
 import config as CFG
 from modules import CBL, RobertaCBL, GPT2CBL
 from utils import normalize, eos_pooling
+from dataset_utils import train_val_test_split, preprocess
 
 parser = argparse.ArgumentParser()
 
@@ -49,28 +50,33 @@ if __name__ == "__main__":
     cbl_name = args.cbl_path.split("/")[-1]
     
     print("loading data...")
-    test_dataset = load_dataset(dataset, split='test')
-    print("test data len: ", len(test_dataset))
+    _, _, test_dataset = train_val_test_split(dataset, CFG.dataset_config[dataset]["label_column"], ratio=0.2, has_val=False)
+
     print("tokenizing...")
     if 'roberta' in backbone:
         tokenizer = RobertaTokenizerFast.from_pretrained('roberta-base')
     elif 'gpt2' in backbone:
         tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
         tokenizer.pad_token = tokenizer.eos_token
+    elif 'bert' in backbone:
+        tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     else:
         raise Exception("backbone should be roberta or gpt2")
 
-    encoded_test_dataset = test_dataset.map(lambda e: tokenizer(e[CFG.example_name[dataset]], padding=True, truncation=True, max_length=args.max_length), batched=True, batch_size=len(test_dataset))
-    encoded_test_dataset = encoded_test_dataset.remove_columns([CFG.example_name[dataset]])
-    if dataset == 'SetFit/sst2':
-        encoded_test_dataset = encoded_test_dataset.remove_columns(['label_text'])
-    if dataset == 'dbpedia_14':
-        encoded_test_dataset = encoded_test_dataset.remove_columns(['title'])
+    map_batch_size = min(args.batch_size, len(test_dataset))
+
+    test_dataset = preprocess(test_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
+
+    encoded_test_dataset = test_dataset.map(
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        batch_size=map_batch_size)
+
+    encoded_test_dataset = encoded_test_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
+
     encoded_test_dataset = encoded_test_dataset[:len(encoded_test_dataset)]
 
     print("creating loader...")
     test_loader = build_loaders(encoded_test_dataset, mode="test")
-
 
     concept_set = CFG.concept_set[dataset]
     if 'roberta' in backbone:
@@ -97,6 +103,19 @@ if __name__ == "__main__":
         else:
             print("preparing backbone(gpt2)+CBL...")
             backbone_cbl = GPT2CBL(len(concept_set), args.dropout).to(device)
+            backbone_cbl.load_state_dict(torch.load(args.cbl_path, map_location=device))
+            backbone_cbl.eval()
+    elif 'bert' in backbone:
+        if 'no_backbone' in cbl_name:
+            print("preparing CBL only...")
+            cbl = CBL(len(concept_set), args.dropout).to(device)
+            cbl.load_state_dict(torch.load(args.cbl_path, map_location=device))
+            cbl.eval()
+            preLM = AutoModel.from_pretrained('bert-base-uncased').to(device)
+            preLM.eval()
+        else:
+            print("preparing backbone(bert)+CBL...")
+            backbone_cbl = RobertaCBL(len(concept_set), args.dropout).to(device)
             backbone_cbl.load_state_dict(torch.load(args.cbl_path, map_location=device))
             backbone_cbl.eval()
     else:
@@ -144,7 +163,7 @@ if __name__ == "__main__":
     b_g = torch.load(b_g_path)
     final.load_state_dict({"weight": W_g, "bias": b_g})
     metric = evaluate.load("accuracy")
-    with torch.torch.no_grad():
+    with torch.no_grad():
         pred = np.argmax(final(test_c).detach().numpy(), axis=-1)
     metric.add_batch(predictions=pred, references=encoded_test_dataset["label"])
     print(metric.compute())

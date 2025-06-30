@@ -82,9 +82,6 @@ train_dataset = preprocess(train_dataset, args.dataset, CFG.dataset_config[args.
 val_dataset = preprocess(val_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
 
 encoded_sim_train_dataset = train_dataset.map(
-
-
-encoded_sim_train_dataset = train_dataset.map(
         lambda e: tokenizer_sim(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
         batch_size=len(train_dataset))
 
