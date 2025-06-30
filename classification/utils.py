@@ -117,3 +117,26 @@ def dbpedia_labels(n):
         return 12
     else:
         return 13
+
+def med_abs_labels(n):
+    boundaries = [30, 60, 90, 120]
+    for i, bound in enumerate(boundaries):
+        if n < bound:
+            return i
+    return len(boundaries)
+    
+def legal_labels(n):
+    # The boundaries for each label, cumulative sums of the provided list
+    boundaries = [7, 12, 21, 31, 40, 49, 54, 61, 67, 77, 83]
+    for i, bound in enumerate(boundaries):
+        if n < bound:
+            return i
+    return len(boundaries)
+
+def ecom_labels(n):
+    # The boundaries for each label, cumulative sums of the provided list
+    boundaries = [30, 60, 90, 120]
+    for i, bound in enumerate(boundaries):
+        if n < bound:
+            return i
+    return len(boundaries)

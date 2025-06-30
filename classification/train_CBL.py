@@ -4,12 +4,14 @@ import gc
 import torch
 import torch.nn.functional as F
 import numpy as np
-from transformers import RobertaTokenizerFast, RobertaModel, GPT2TokenizerFast, GPT2Model
+from transformers import AutoTokenizer, AutoModel
 from datasets import load_dataset, concatenate_datasets
 import config as CFG
+from dataset_utils import preprocess, train_val_test_split
 from modules import CBL, RobertaCBL, GPT2CBL
 from utils import cos_sim_cubed, get_labels, eos_pooling
 import time
+from dataset_utils import *
 
 parser = argparse.ArgumentParser()
 
@@ -58,12 +60,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("loading data...")
-    train_dataset = load_dataset(args.dataset, split='train')
-    if args.dataset == 'SetFit/sst2':
-        val_dataset = load_dataset(args.dataset, split='validation')
-    print("training data len: ", len(train_dataset))
-    if args.dataset == 'SetFit/sst2':
-        print("val data len: ", len(val_dataset))
+    train_dataset, val_dataset, test_dataset = train_val_test_split(args.dataset, CFG.dataset_config[args.dataset]["label_column"], ratio=0.2, has_val=False)
+    
     print("tokenizing...")
 
     if args.labeling == 'llm':
@@ -84,34 +82,33 @@ if __name__ == "__main__":
             print("val labeled data len: ", len(val_dataset))
 
     if args.backbone == 'roberta':
-        tokenizer = RobertaTokenizerFast.from_pretrained('roberta-base')
+        tokenizer = AutoTokenizer.from_pretrained('roberta-base')
     elif args.backbone == 'gpt2':
-        tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
+        tokenizer = AutoTokenizer.from_pretrained('gpt2')
         tokenizer.pad_token = tokenizer.eos_token
+    elif args.backbone == 'bert':
+        tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     else:
         raise Exception("backbone should be roberta or gpt2")
 
+    map_batch_size = min(1024, len(train_dataset), len(val_dataset), len(test_dataset))
+
+    train_dataset = preprocess(train_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
+    val_dataset = preprocess(val_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
+
     encoded_train_dataset = train_dataset.map(
-        lambda e: tokenizer(e[CFG.example_name[args.dataset]], padding=True, truncation=True, max_length=args.max_length), batched=True,
-        batch_size=len(train_dataset))
-    encoded_train_dataset = encoded_train_dataset.remove_columns([CFG.example_name[args.dataset]])
-    if args.dataset == 'SetFit/sst2':
-        encoded_train_dataset = encoded_train_dataset.remove_columns(['label_text'])
-    if args.dataset == 'dbpedia_14':
-        encoded_train_dataset = encoded_train_dataset.remove_columns(['title'])
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        batch_size=map_batch_size)
+    encoded_val_dataset = val_dataset.map(
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        batch_size=map_batch_size)
+    
+    encoded_train_dataset = encoded_train_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
+    encoded_val_dataset = encoded_val_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
+
+    # HuggingFace map operations are lazy so we access the entire dataset to ensure the operations are applied
     encoded_train_dataset = encoded_train_dataset[:len(encoded_train_dataset)]
-
-    if args.dataset == 'SetFit/sst2':
-        encoded_val_dataset = val_dataset.map(
-            lambda e: tokenizer(e[CFG.example_name[args.dataset]], padding=True, truncation=True, max_length=args.max_length), batched=True,
-            batch_size=len(val_dataset))
-        encoded_val_dataset = encoded_val_dataset.remove_columns([CFG.example_name[args.dataset]])
-        if args.dataset == 'SetFit/sst2':
-            encoded_val_dataset = encoded_val_dataset.remove_columns(['label_text'])
-        if args.dataset == 'dbpedia_14':
-            encoded_val_dataset = encoded_val_dataset.remove_columns(['title'])
-        encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
-
+    encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
 
     concept_set = CFG.concept_set[args.dataset]
     print("concept len: ", len(concept_set))
@@ -159,14 +156,13 @@ if __name__ == "__main__":
 
     print("creating loader...")
     train_loader = build_loaders(encoded_train_dataset, train_similarity, mode="train")
-    if args.dataset == 'SetFit/sst2':
-        val_loader = build_loaders(encoded_val_dataset, val_similarity, mode="valid")
+    val_loader = build_loaders(encoded_val_dataset, val_similarity, mode="valid")
 
     if args.backbone == 'roberta':
         if args.tune_cbl_only:
             print("preparing CBL only...")
             cbl = CBL(len(concept_set), args.dropout).to(device)
-            preLM = RobertaModel.from_pretrained('roberta-base').to(device)
+            preLM = AutoModel.from_pretrained('roberta-base').to(device)
             preLM.eval()
             optimizer = torch.optim.Adam(cbl.parameters(), lr=1e-4)
         else:
@@ -177,13 +173,23 @@ if __name__ == "__main__":
         if args.tune_cbl_only:
             print("preparing CBL only...")
             cbl = CBL(len(concept_set), args.dropout).to(device)
-            preLM = GPT2Model.from_pretrained('gpt2').to(device)
+            preLM = AutoModel.from_pretrained('gpt2').to(device)
             preLM.eval()
             optimizer = torch.optim.Adam(cbl.parameters(), lr=1e-4)
         else:
             print("preparing backbone(gpt2)+CBL...")
             backbone_cbl = GPT2CBL(len(concept_set), args.dropout).to(device)
             optimizer = torch.optim.Adam(backbone_cbl.parameters(), lr=5e-6)
+    elif args.backbone == 'bert':
+        if args.tune_cbl_only:
+            print("preparing CBL only...")
+            cbl = CBL(len(concept_set), args.dropout).to(device)
+            preLM = AutoModel.from_pretrained('bert-base-uncased').to(device)
+            preLM.eval()
+            optimizer = torch.optim.Adam(cbl.parameters(), lr=1e-4)
+        else:
+            print("preparing backbone(bert)+CBL...")
+            backbone_cbl = RobertaCBL(len(concept_set), args.dropout).to(device)
     else:
         raise Exception("backbone should be roberta or gpt2")
 
@@ -194,6 +200,8 @@ if __name__ == "__main__":
         prefix += 'roberta_cbm'
     elif args.backbone == 'gpt2':
         prefix += 'gpt2_cbm'
+    elif args.backbone == 'bert':
+        prefix += 'bert_cbm'
     prefix += "/"
     if not os.path.exists(prefix):
         os.makedirs(prefix)
@@ -224,7 +232,7 @@ if __name__ == "__main__":
             if args.tune_cbl_only:
                 with torch.no_grad():
                     LM_features = preLM(input_ids=batch_text["input_ids"], attention_mask=batch_text["attention_mask"]).last_hidden_state
-                    if args.backbone == 'roberta':
+                    if args.backbone == 'roberta' or args.backbone == 'bert':
                         LM_features = LM_features[:, 0, :]
                     elif args.backbone == 'gpt2':
                         LM_features = eos_pooling(LM_features, batch_text["attention_mask"])
@@ -242,41 +250,34 @@ if __name__ == "__main__":
         avg_training_loss = sum(training_loss)/len(training_loss)
         print("training loss: ", avg_training_loss)
 
-        if args.dataset == 'SetFit/sst2':
-            if args.tune_cbl_only:
-                cbl.eval()
-            else:
-                backbone_cbl.eval()
-            val_loss = []
-            for batch in val_loader:
-                batch_text, batch_sim = batch[0], batch[1]
-                batch_text = {k: v.to(device) for k, v in batch_text.items()}
-                batch_sim = batch_sim.to(device)
-                with torch.no_grad():
-                    if args.tune_cbl_only:
-                        LM_features = preLM(input_ids=batch_text["input_ids"], attention_mask=batch_text["attention_mask"]).last_hidden_state
-                        if args.backbone == 'roberta':
-                            LM_features = LM_features[:, 0, :]
-                        elif args.backbone == 'gpt2':
-                            LM_features = eos_pooling(LM_features, batch_text["attention_mask"])
-                        else:
-                            raise Exception("backbone should be roberta or gpt2")
-                        cbl_features = cbl(LM_features)
-                    else:
-                        cbl_features = backbone_cbl(batch_text)
-                    loss = -cos_sim_cubed(cbl_features, batch_sim)
-                    val_loss.append(loss.detach().cpu().numpy())
-            avg_val_loss = sum(val_loss)/len(val_loss)
-            print("val loss: ", avg_val_loss)
-            if avg_val_loss < best_loss:
-                print("save model")
-                best_loss = avg_val_loss
-                if args.tune_cbl_only:
-                    torch.save(cbl.state_dict(), prefix + model_name + ".pt")
-                else:
-                    torch.save(backbone_cbl.state_dict(), prefix + model_name + ".pt")
+        if args.tune_cbl_only:
+            cbl.eval()
         else:
+            backbone_cbl.eval()
+        val_loss = []
+        for batch in val_loader:
+            batch_text, batch_sim = batch[0], batch[1]
+            batch_text = {k: v.to(device) for k, v in batch_text.items()}
+            batch_sim = batch_sim.to(device)
+            with torch.no_grad():
+                if args.tune_cbl_only:
+                    LM_features = preLM(input_ids=batch_text["input_ids"], attention_mask=batch_text["attention_mask"]).last_hidden_state
+                    if args.backbone == 'roberta' or args.backbone == 'bert':
+                        LM_features = LM_features[:, 0, :]
+                    elif args.backbone == 'gpt2':
+                        LM_features = eos_pooling(LM_features, batch_text["attention_mask"])
+                    else:
+                        raise Exception("backbone should be roberta or gpt2")
+                    cbl_features = cbl(LM_features)
+                else:
+                    cbl_features = backbone_cbl(batch_text)
+                loss = -cos_sim_cubed(cbl_features, batch_sim)
+                val_loss.append(loss.detach().cpu().numpy())
+        avg_val_loss = sum(val_loss)/len(val_loss)
+        print("val loss: ", avg_val_loss)
+        if avg_val_loss < best_loss:
             print("save model")
+            best_loss = avg_val_loss
             if args.tune_cbl_only:
                 torch.save(cbl.state_dict(), prefix + model_name + ".pt")
             else:
