@@ -20,7 +20,7 @@ parser.add_argument("--dataset", type=str, default="SetFit/sst2")
 parser.add_argument("--concept_text_sim_model", type=str, default="mpnet", help="mpnet, simcse or angle")
 
 parser.add_argument("--max_length", type=int, default=512)
-parser.add_argument("--num_workers", type=int, default=0)
+parser.add_argument("--num_workers", type=int, default=4)
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 args = parser.parse_args()
