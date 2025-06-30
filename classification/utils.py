@@ -63,6 +63,12 @@ def get_labels(n, d):
         return agnews_labels(n)
     if d == 'dbpedia_14':
         return dbpedia_labels(n)
+    if d == "TimSchopf/medical_abstracts":
+        return med_abs_labels(n)
+    if d == "darklord1611/legal_citations":
+        return legal_labels(n)
+    if d == "darklord1611/ecom_categories":
+        return ecom_labels(n)
 
     return None
 
