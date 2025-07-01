@@ -99,10 +99,10 @@ if __name__ == "__main__":
     val_dataset = preprocess(val_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
 
     encoded_train_dataset = train_dataset.map(
-        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding="max_length", truncation=True, max_length=args.max_length), batched=True,
         batch_size=map_batch_size)
     encoded_val_dataset = val_dataset.map(
-        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding="max_length", truncation=True, max_length=args.max_length), batched=True,
         batch_size=map_batch_size)
     
     encoded_train_dataset = encoded_train_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
@@ -136,21 +136,36 @@ if __name__ == "__main__":
     if args.automatic_concept_correction:
         start = time.time()
         print("training intervention...")
-        for i in range(train_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    train_similarity[i][j] = 0.0
-                else:
-                    if train_similarity[i][j] < 0.0:
-                        train_similarity[i][j] = 0.0
+        # Convert label list to NumPy array
+        train_labels = np.array(encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = train_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        train_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(train_similarity, 0.0, out=train_similarity)
 
-        for i in range(val_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    val_similarity[i][j] = 0.0
-                else:
-                    if val_similarity[i][j] < 0.0:
-                        val_similarity[i][j] = 0.0
+
+        val_labels = np.array(encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = val_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        val_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(val_similarity, 0.0, out=val_similarity)
+        
         end = time.time()
         print("time of training intervention:", (end - start) / 3600, "hours")
 
@@ -241,8 +256,8 @@ if __name__ == "__main__":
                 cbl_features = cbl(LM_features)
             else:
                 cbl_features = backbone_cbl(batch_text)
-            loss = -cos_sim_cubed(cbl_features, batch_sim)
             optimizer.zero_grad()
+            loss = -cos_sim_cubed(cbl_features, batch_sim)
             loss.backward()
             optimizer.step()
             print("batch ", str(i), " loss: ", loss.detach().cpu().numpy(), end="\r")

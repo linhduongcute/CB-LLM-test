@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser.add_argument("--dataset", type=str, default="SetFit/sst2")
-parser.add_argument("--backbone", type=str, default="bert", help="roberta or gpt2")
+parser.add_argument("--backbone", type=str, default="roberta", help="roberta or gpt2")
 parser.add_argument('--tune_cbl_only', action=argparse.BooleanOptionalAction)
 parser.add_argument('--automatic_concept_correction', action=argparse.BooleanOptionalAction)
 parser.add_argument("--labeling", type=str, default="mpnet", help="mpnet, angle, simcse, llm")
@@ -109,9 +109,8 @@ if __name__ == "__main__":
     encoded_val_dataset = encoded_val_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
 
     # HuggingFace map operations are lazy so we access the entire dataset to ensure the operations are applied
-    # encoded_train_dataset = encoded_train_dataset[:len(encoded_train_dataset)]
-    # encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
-    
+    encoded_train_dataset = encoded_train_dataset[:len(encoded_train_dataset)]
+    encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
 
     concept_set = CFG.concept_set[args.dataset]
     print("concept len: ", len(concept_set))
@@ -137,21 +136,36 @@ if __name__ == "__main__":
     if args.automatic_concept_correction:
         start = time.time()
         print("training intervention...")
-        for i in range(train_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    train_similarity[i][j] = 0.0
-                else:
-                    if train_similarity[i][j] < 0.0:
-                        train_similarity[i][j] = 0.0
+        # Convert label list to NumPy array
+        train_labels = np.array(encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = train_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        train_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(train_similarity, 0.0, out=train_similarity)
 
-        for i in range(val_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    val_similarity[i][j] = 0.0
-                else:
-                    if val_similarity[i][j] < 0.0:
-                        val_similarity[i][j] = 0.0
+
+        val_labels = np.array(encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = val_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        val_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(val_similarity, 0.0, out=val_similarity)
+        
         end = time.time()
         print("time of training intervention:", (end - start) / 3600, "hours")
 
@@ -217,8 +231,7 @@ if __name__ == "__main__":
     if args.labeling == 'llm':
         epochs = 10
     else:
-        # epochs = CFG.cbl_epochs[args.dataset]
-        epochs = 10
+        epochs = CFG.cbl_epochs[args.dataset]
     for e in range(epochs):
         print("Epoch ", e+1, ":")
         if args.tune_cbl_only:

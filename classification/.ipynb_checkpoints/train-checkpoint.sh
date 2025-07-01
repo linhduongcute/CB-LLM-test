@@ -1,5 +1,5 @@
 safe_dataset="${1//\//_}"
-safe_model="${3//\//_}"
+safe_model="${2//\//_}"
 
 # Determine concept embedding model folder
 concept_base="mpnet_acs"
@@ -25,10 +25,10 @@ cbl_model_path="${concept_dir}/${safe_model}_cbm/cbl_no_backbone_acc.pt"
 
 # Check if the CBL model already exists
 if [[ ! -f "$cbl_model_path" ]]; then
-    python train_CBL.py --automatic_concept_correction --dataset="${1}" --backbone="${3}" --tune_cbl_only
+    python train_CBL.py --automatic_concept_correction --dataset="${1}" --backbone="${2}" --tune_cbl_only
 else
     echo "CBL model already exists at $cbl_model_path. Skipping train_CBL.py."
 fi
 
 # Continue with training final layer
-python train_FL.py --cbl_path="$cbl_model_path" --dataset="${1}" --backbone="${3}"
+python train_FL.py --cbl_path="$cbl_model_path" --dataset="${1}" --backbone="${2}"
