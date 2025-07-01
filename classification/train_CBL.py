@@ -109,8 +109,9 @@ if __name__ == "__main__":
     encoded_val_dataset = encoded_val_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
 
     # HuggingFace map operations are lazy so we access the entire dataset to ensure the operations are applied
-    encoded_train_dataset = encoded_train_dataset[:len(encoded_train_dataset)]
-    encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
+    # encoded_train_dataset = encoded_train_dataset[:len(encoded_train_dataset)]
+    # encoded_val_dataset = encoded_val_dataset[:len(encoded_val_dataset)]
+    
 
     concept_set = CFG.concept_set[args.dataset]
     print("concept len: ", len(concept_set))
@@ -242,8 +243,8 @@ if __name__ == "__main__":
                 cbl_features = cbl(LM_features)
             else:
                 cbl_features = backbone_cbl(batch_text)
-            loss = -cos_sim_cubed(cbl_features, batch_sim)
             optimizer.zero_grad()
+            loss = -cos_sim_cubed(cbl_features, batch_sim)
             loss.backward()
             optimizer.step()
             print("batch ", str(i), " loss: ", loss.detach().cpu().numpy(), end="\r")
