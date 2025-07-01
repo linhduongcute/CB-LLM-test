@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser.add_argument("--dataset", type=str, default="SetFit/sst2")
-parser.add_argument("--backbone", type=str, default="SetFit/sst2")
+parser.add_argument("--backbone", type=str, default="bert")
 parser.add_argument("--cbl_path", type=str, default="mpnet_acs/SetFit_sst2/roberta_cbm/cbl.pt")
 parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--saga_epoch", type=int, default=500)

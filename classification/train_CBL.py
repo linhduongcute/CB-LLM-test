@@ -216,7 +216,8 @@ if __name__ == "__main__":
     if args.labeling == 'llm':
         epochs = 10
     else:
-        epochs = CFG.cbl_epochs[args.dataset]
+        # epochs = CFG.cbl_epochs[args.dataset]
+        epochs = 10
     for e in range(epochs):
         print("Epoch ", e+1, ":")
         if args.tune_cbl_only:

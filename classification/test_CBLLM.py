@@ -19,7 +19,7 @@ parser.add_argument('--sparse', action=argparse.BooleanOptionalAction)
 parser.add_argument("--batch_size", type=int, default=256)
 
 parser.add_argument("--max_length", type=int, default=512)
-parser.add_argument("--num_workers", type=int, default=0)
+parser.add_argument("--num_workers", type=int, default=4)
 parser.add_argument("--dropout", type=float, default=0.1)
 
 class ClassificationDataset(torch.utils.data.Dataset):
@@ -129,9 +129,9 @@ if __name__ == "__main__":
             if 'no_backbone' in cbl_name:
                 test_features = preLM(input_ids=batch["input_ids"],
                                       attention_mask=batch["attention_mask"]).last_hidden_state
-                if args.backbone == 'roberta':
+                if 'roberta' in backbone or 'bert' in backbone:
                     test_features = test_features[:, 0, :]
-                elif args.backbone == 'gpt2':
+                elif 'gpt2' in backbone:
                     test_features = eos_pooling(test_features, batch["attention_mask"])
                 else:
                     raise Exception("backbone should be roberta or gpt2")
