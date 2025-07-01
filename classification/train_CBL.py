@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser.add_argument("--dataset", type=str, default="SetFit/sst2")
-parser.add_argument("--backbone", type=str, default="roberta", help="roberta or gpt2")
+parser.add_argument("--backbone", type=str, default="bert", help="roberta or gpt2")
 parser.add_argument('--tune_cbl_only', action=argparse.BooleanOptionalAction)
 parser.add_argument('--automatic_concept_correction', action=argparse.BooleanOptionalAction)
 parser.add_argument("--labeling", type=str, default="mpnet", help="mpnet, angle, simcse, llm")
@@ -99,10 +99,10 @@ if __name__ == "__main__":
     val_dataset = preprocess(val_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
 
     encoded_train_dataset = train_dataset.map(
-        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding="max_length", truncation=True, max_length=args.max_length), batched=True,
         batch_size=map_batch_size)
     encoded_val_dataset = val_dataset.map(
-        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding="max_length", truncation=True, max_length=args.max_length), batched=True,
         batch_size=map_batch_size)
     
     encoded_train_dataset = encoded_train_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])

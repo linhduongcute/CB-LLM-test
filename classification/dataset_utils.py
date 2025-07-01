@@ -36,7 +36,7 @@ def train_val_test_split(dataset_name, label_column, ratio=0.2, has_val=False):
             labels = [str(label) for label in labels]
 
         train_dataset = train_dataset.cast_column(label_column, ClassLabel(names=labels))
-        test_dataset = train_dataset.cast_column(label_column, ClassLabel(names=labels))
+        test_dataset = test_dataset.cast_column(label_column, ClassLabel(names=labels))
         train_val_split = train_dataset.train_test_split(test_size=ratio, seed=42, stratify_by_column=label_column)
 
         train_dataset = train_val_split["train"]
