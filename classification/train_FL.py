@@ -11,6 +11,7 @@ from glm_saga.elasticnet import IndexedTensorDataset, glm_saga
 from torch.utils.data import DataLoader, TensorDataset
 from utils import normalize, eos_pooling
 from dataset_utils import train_val_test_split, preprocess
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 
@@ -149,49 +150,50 @@ if __name__ == "__main__":
     FL_train_features = []
     FL_val_features = []
     FL_test_features = []
-    for batch in train_loader:
+    
+    for batch in tqdm(train_loader, desc="Extracting train features"):
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             if 'no_backbone' in cbl_name:
                 train_features = preLM(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).last_hidden_state
-                if args.backbone == 'roberta' or args.backbone == 'bert':
+                if args.backbone in ['roberta', 'bert']:
                     train_features = train_features[:, 0, :]
                 elif args.backbone == 'gpt2':
                     train_features = eos_pooling(train_features, batch["attention_mask"])
                 else:
-                    raise Exception("backbone should be roberta or gpt2")
+                    raise Exception("backbone should be roberta, gpt2 or bert")
                 train_features = cbl(train_features)
             else:
                 train_features = backbone_cbl(batch)
             FL_train_features.append(train_features)
-
-    for batch in val_loader:
+    
+    for batch in tqdm(val_loader, desc="Extracting val features"):
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             if 'no_backbone' in cbl_name:
                 val_features = preLM(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).last_hidden_state
-                if args.backbone == 'roberta' or args.backbone == 'bert':
+                if args.backbone in ['roberta', 'bert']:
                     val_features = val_features[:, 0, :]
                 elif args.backbone == 'gpt2':
                     val_features = eos_pooling(val_features, batch["attention_mask"])
                 else:
-                    raise Exception("backbone should be roberta or gpt2")
+                    raise Exception("backbone should be roberta, gpt2 or bert")
                 val_features = cbl(val_features)
             else:
                 val_features = backbone_cbl(batch)
             FL_val_features.append(val_features)
-
-    for batch in test_loader:
+    
+    for batch in tqdm(test_loader, desc="Extracting test features"):
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             if 'no_backbone' in cbl_name:
                 test_features = preLM(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).last_hidden_state
-                if args.backbone == 'roberta' or args.backbone == 'bert':
+                if args.backbone in ['roberta', 'bert']:
                     test_features = test_features[:, 0, :]
                 elif args.backbone == 'gpt2':
                     test_features = eos_pooling(test_features, batch["attention_mask"])
                 else:
-                    raise Exception("backbone should be roberta or gpt2")
+                    raise Exception("backbone should be roberta, gpt2 or bert")
                 test_features = cbl(test_features)
             else:
                 test_features = backbone_cbl(batch)
