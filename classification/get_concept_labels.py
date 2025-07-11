@@ -142,7 +142,8 @@ print("time of concept scoring:", (end-start)/3600, "hours")
 print("getting concept scores for val set...")
 val_sim = []
 start = time.time()
-for batch_sim in val_sim_loader:
+for i, batch_sim in enumerate(val_sim_loader):
+    print("batch ", str(i), end="\r")
     batch_sim = {k: v.to(device) for k, v in batch_sim.items()}
     with torch.no_grad():
         if args.concept_text_sim_model == 'mpnet':

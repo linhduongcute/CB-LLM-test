@@ -36,6 +36,7 @@ def train_val_test_split(dataset_name, label_column, ratio=0.2, has_val=False):
             labels = [str(label) for label in labels]
 
         train_dataset = train_dataset.cast_column(label_column, ClassLabel(names=labels))
+        test_dataset = test_dataset.cast_column(label_column, ClassLabel(names=labels))
         train_val_split = train_dataset.train_test_split(test_size=ratio, seed=42, stratify_by_column=label_column)
 
         train_dataset = train_val_split["train"]
@@ -54,6 +55,8 @@ def preprocess(dataset, dataset_name, text_column, label_column):
     dataset = clean_dataset_with_extra_columns(dataset, text_column, label_column)
     dataset = clean_dataset_with_multiple_labels_per_row(dataset, text_column, label_column)
     dataset = preprocess_label_column(dataset, dataset_name, label_column)
+
+    dataset = dataset.filter(lambda x: x[text_column] is not None and x[text_column] != "")
 
     return dataset
 

@@ -57,11 +57,11 @@ def normalize(x, d=-1, mean=None, std=None):
 def get_labels(n, d):
     if d == 'SetFit/sst2':
         return sst2_labels(n)
-    if d == 'yelp_polarity':
+    if d == 'fancyzhx/yelp_polarity':
         return yelpp_labels(n)
-    if d == 'ag_news':
+    if d == 'fancyzhx/ag_news':
         return agnews_labels(n)
-    if d == 'dbpedia_14':
+    if d == 'fancyzhx/dbpedia_14':
         return dbpedia_labels(n)
     if d == "TimSchopf/medical_abstracts":
         return med_abs_labels(n)
@@ -69,6 +69,10 @@ def get_labels(n, d):
         return legal_labels(n)
     if d == "darklord1611/ecom_categories":
         return ecom_labels(n)
+    if d == "darklord1611/stackoverflow_question_ratings":
+        return stack_over_flow_labels(n)
+
+    raise(ValueError)
 
     return None
 
@@ -142,6 +146,14 @@ def legal_labels(n):
 def ecom_labels(n):
     # The boundaries for each label, cumulative sums of the provided list
     boundaries = [30, 60, 90, 120]
+    for i, bound in enumerate(boundaries):
+        if n < bound:
+            return i
+    return len(boundaries)
+
+
+def stack_over_flow_labels(n):
+    boundaries = [20, 40, 60]
     for i, bound in enumerate(boundaries):
         if n < bound:
             return i

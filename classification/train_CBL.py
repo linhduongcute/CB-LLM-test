@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModel
 from datasets import load_dataset, concatenate_datasets
 import config as CFG
 from dataset_utils import preprocess, train_val_test_split
-from modules import CBL, RobertaCBL, GPT2CBL
+from modules import CBL, RobertaCBL, GPT2CBL, BERTCBL
 from utils import cos_sim_cubed, get_labels, eos_pooling
 import time
 from dataset_utils import *
@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser.add_argument("--dataset", type=str, default="SetFit/sst2")
-parser.add_argument("--backbone", type=str, default="roberta", help="roberta or gpt2")
+parser.add_argument("--backbone", type=str, default="roberta", help="roberta or gpt2 or bert")
 parser.add_argument('--tune_cbl_only', action=argparse.BooleanOptionalAction)
 parser.add_argument('--automatic_concept_correction', action=argparse.BooleanOptionalAction)
 parser.add_argument("--labeling", type=str, default="mpnet", help="mpnet, angle, simcse, llm")
@@ -25,7 +25,7 @@ parser.add_argument("--cbl_only_batch_size", type=int, default=64)
 parser.add_argument("--batch_size", type=int, default=16)
 
 parser.add_argument("--max_length", type=int, default=512)
-parser.add_argument("--num_workers", type=int, default=4)
+parser.add_argument("--num_workers", type=int, default=0)
 parser.add_argument("--dropout", type=float, default=0.1)
 
 
@@ -63,7 +63,6 @@ if __name__ == "__main__":
 
     print("loading data...")
     train_dataset, val_dataset, test_dataset = train_val_test_split(args.dataset, CFG.dataset_config[args.dataset]["label_column"], ratio=0.2, has_val=False)
-    
     print("tokenizing...")
 
     if args.labeling == 'llm':
@@ -93,17 +92,17 @@ if __name__ == "__main__":
     else:
         raise Exception("backbone should be roberta or gpt2")
 
-    map_batch_size = min(1024, len(train_dataset), len(val_dataset), len(test_dataset))
+    print(list(set(train_dataset[CFG.dataset_config[args.dataset]["label_column"]])))
 
     train_dataset = preprocess(train_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
     val_dataset = preprocess(val_dataset, args.dataset, CFG.dataset_config[args.dataset]["text_column"], CFG.dataset_config[args.dataset]["label_column"])
 
     encoded_train_dataset = train_dataset.map(
         lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
-        batch_size=map_batch_size)
+        batch_size=len(train_dataset))
     encoded_val_dataset = val_dataset.map(
-        lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
-        batch_size=map_batch_size)
+       lambda e: tokenizer(e[CFG.dataset_config[args.dataset]["text_column"]], padding=True, truncation=True, max_length=args.max_length), batched=True,
+       batch_size=len(val_dataset))
     
     encoded_train_dataset = encoded_train_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
     encoded_val_dataset = encoded_val_dataset.remove_columns([CFG.dataset_config[args.dataset]["text_column"]])
@@ -136,21 +135,36 @@ if __name__ == "__main__":
     if args.automatic_concept_correction:
         start = time.time()
         print("training intervention...")
-        for i in range(train_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    train_similarity[i][j] = 0.0
-                else:
-                    if train_similarity[i][j] < 0.0:
-                        train_similarity[i][j] = 0.0
+        # Convert label list to NumPy array
+        train_labels = np.array(encoded_train_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = train_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        train_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(train_similarity, 0.0, out=train_similarity)
 
-        for i in range(val_similarity.shape[0]):
-            for j in range(len(concept_set)):
-                if get_labels(j, args.dataset) != encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]][i]:
-                    val_similarity[i][j] = 0.0
-                else:
-                    if val_similarity[i][j] < 0.0:
-                        val_similarity[i][j] = 0.0
+
+        val_labels = np.array(encoded_val_dataset[CFG.dataset_config[args.dataset]["label_column"]])
+        
+        # Get all concept labels
+        concept_labels = np.array([get_labels(j, args.dataset) for j in range(len(concept_set))])  # shape: (num_concepts,)
+        
+        # Create a (num_samples, num_concepts) label match matrix
+        label_matches = val_labels[:, None] == concept_labels[None, :]  # shape: (num_samples, num_concepts)
+        
+        # Zero out all mismatched labels
+        val_similarity[~label_matches] = 0.0
+        
+        # Clip negative similarities to 0
+        np.maximum(val_similarity, 0.0, out=val_similarity)
+        
         end = time.time()
         print("time of training intervention:", (end - start) / 3600, "hours")
 
@@ -189,7 +203,8 @@ if __name__ == "__main__":
             optimizer = torch.optim.Adam(cbl.parameters(), lr=1e-4)
         else:
             print("preparing backbone(bert)+CBL...")
-            backbone_cbl = RobertaCBL(len(concept_set), args.dropout).to(device)
+            backbone_cbl = BERTCBL(len(concept_set), args.dropout).to(device)
+            optimizer = torch.optim.Adam(backbone_cbl.parameters(), lr=5e-6)
     else:
         raise Exception("backbone should be roberta or gpt2")
 
@@ -241,15 +256,14 @@ if __name__ == "__main__":
                 cbl_features = cbl(LM_features)
             else:
                 cbl_features = backbone_cbl(batch_text)
-            loss = -cos_sim_cubed(cbl_features, batch_sim)
             optimizer.zero_grad()
+            loss = -cos_sim_cubed(cbl_features, batch_sim)
             loss.backward()
             optimizer.step()
             print("batch ", str(i), " loss: ", loss.detach().cpu().numpy(), end="\r")
             training_loss.append(loss.detach().cpu().numpy())
         avg_training_loss = sum(training_loss)/len(training_loss)
         print("training loss: ", avg_training_loss)
-
         if args.tune_cbl_only:
             cbl.eval()
         else:
