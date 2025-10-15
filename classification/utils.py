@@ -129,7 +129,7 @@ def dbpedia_labels(n):
         return 13
 
 def med_abs_labels(n):
-    boundaries = [30, 60, 90, 120, 150]
+    boundaries = [30, 60, 90, 120]
     for i, bound in enumerate(boundaries):
         if n < bound:
             return i
