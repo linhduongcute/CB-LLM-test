@@ -63,7 +63,7 @@ def get_labels(n, d):
         return agnews_labels(n)
     if d == 'fancyzhx/dbpedia_14':
         return dbpedia_labels(n)
-    if d == "TimSchopf/medical_abstracts":
+    if d == "Duyacquy/Single_label_medical_abstract":
         return med_abs_labels(n)
     if d == "darklord1611/legal_citations":
         return legal_labels(n)
@@ -129,7 +129,7 @@ def dbpedia_labels(n):
         return 13
 
 def med_abs_labels(n):
-    boundaries = [30, 60, 90, 120]
+    boundaries = [30, 60, 90, 120, 150]
     for i, bound in enumerate(boundaries):
         if n < bound:
             return i

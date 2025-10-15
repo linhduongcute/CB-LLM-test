@@ -16,22 +16,22 @@ concepts_from_labels = {'SetFit/sst2': ["negative","positive"], "fancyzhx/yelp_p
         "album",
         "film",
         "written work"
-    ], "TimSchopf/medical_abstracts": ["neoplasms", "digestive_system_diseases", "nervous_system_diseases", "cardiovascular_diseases", "general_pathological_diseases"], "darklord1611/legal_citations": ["affirmed", "applied", "approved", "cited", "considered", "discussed", "distinguished", "followed", "referred to", "related"], "darklord1611/ecom_categories": ["Household", "Books", "Electronics", "Clothing & Accsessories"], "darklord1611/stackoverflow_question_ratings": ["HQ", "LQ_EDIT", "LQ_CLOSE"]} # Done
+    ], "Duyacquy/Single_label_medical_abstract": ["neoplasms", "digestive_system_diseases", "nervous_system_diseases", "cardiovascular_diseases", "general_pathological_diseases"], "darklord1611/legal_citations": ["affirmed", "applied", "approved", "cited", "considered", "discussed", "distinguished", "followed", "referred to", "related"], "darklord1611/ecom_categories": ["Household", "Books", "Electronics", "Clothing & Accsessories"], "darklord1611/stackoverflow_question_ratings": ["HQ", "LQ_EDIT", "LQ_CLOSE"]} # Done
 
-class_num = {'SetFit/sst2': 2, "fancyzhx/ag_news": 4, "fancyzhx/yelp_polarity": 2, "fancyzhx/dbpedia_14": 14, "TimSchopf/medical_abstracts": 5, "darklord1611/legal_citations": 10, "darklord1611/ecom_categories": 4, "darklord1611/stackoverflow_question_ratings": 3} # Done
+class_num = {'SetFit/sst2': 2, "fancyzhx/ag_news": 4, "fancyzhx/yelp_polarity": 2, "fancyzhx/dbpedia_14": 14, "Duyacquy/Single_label_medical_abstract": 5, "darklord1611/legal_citations": 10, "darklord1611/ecom_categories": 4, "darklord1611/stackoverflow_question_ratings": 3} # Done
 
 # Config for Roberta-Base baseline
 finetune_epoch = {'SetFit/sst2': 3, "fancyzhx/ag_news": 2, "fancyzhx/yelp_polarity": 2, "fancyzhx/dbpedia_14": 2}
 finetune_mlp_epoch = {'SetFit/sst2': 30, "fancyzhx/ag_news": 5, "fancyzhx/yelp_polarity": 3, "fancyzhx/dbpedia_14": 3}
 
 # Config for CBM training
-concept_set = {'SetFit/sst2': concepts.sst2, "fancyzhx/yelp_polarity": concepts.yelpp, "fancyzhx/ag_news": concepts.agnews, "fancyzhx/dbpedia_14": concepts.dbpedia, "TimSchopf/medical_abstracts": concepts.med_abs, "darklord1611/legal_citations": concepts.legal, "darklord1611/ecom_categories": concepts.ecom, "darklord1611/stackoverflow_question_ratings": concepts.stackoverflow}
+concept_set = {'SetFit/sst2': concepts.sst2, "fancyzhx/yelp_polarity": concepts.yelpp, "fancyzhx/ag_news": concepts.agnews, "fancyzhx/dbpedia_14": concepts.dbpedia, "Duyacquy/Single_label_medical_abstract": concepts.med_abs, "darklord1611/legal_citations": concepts.legal, "darklord1611/ecom_categories": concepts.ecom, "darklord1611/stackoverflow_question_ratings": concepts.stackoverflow}
 
 
-cbl_epochs = {'SetFit/sst2': 10, "fancyzhx/ag_news": 10, "fancyzhx/yelp_polarity": 10, "fancyzhx/dbpedia_14": 10, "TimSchopf/medical_abstracts": 10, "darklord1611/legal_citations": 10, "darklord1611/ecom_categories": 10, "darklord1611/stackoverflow_question_ratings": 10}
+cbl_epochs = {'SetFit/sst2': 10, "fancyzhx/ag_news": 10, "fancyzhx/yelp_polarity": 10, "fancyzhx/dbpedia_14": 10, "Duyacquy/Single_label_medical_abstract": 10, "darklord1611/legal_citations": 10, "darklord1611/ecom_categories": 10, "darklord1611/stackoverflow_question_ratings": 10}
 
 dataset_config = {
-    "TimSchopf/medical_abstracts": {
+    "Duyacquy/Single_label_medical_abstract": {
         "text_column": "medical_abstract",
         "label_column": "condition_label"
     },
