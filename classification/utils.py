@@ -153,7 +153,7 @@ def ecom_labels(n):
 
 
 def stack_over_flow_labels(n):
-    boundaries = [30, 60, 90]
+    boundaries = [20, 40, 60]
     for i, bound in enumerate(boundaries):
         if n < bound:
             return i
