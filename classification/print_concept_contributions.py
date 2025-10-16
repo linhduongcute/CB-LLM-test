@@ -45,10 +45,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     acs = args.cbl_path.split("/")[0]
-    dataset = args.cbl_path.split("/")[1] if 'sst2' not in args.cbl_path.split("/")[1] else args.cbl_path.split("/")[1].replace('_', '/')
-    backbone = args.cbl_path.split("/")[2]
-    cbl_name = args.cbl_path.split("/")[-1]
+    raw_dataset = args.cbl_path.split("/")[1]
 
+    def normalize_dataset_name(seg: str) -> str:
+        if seg in CFG.example_name:
+            return seg
+        alt = seg.replace('_', '/')
+        if alt in CFG.example_name:
+            return alt
+        return seg
+
+    dataset = normalize_dataset_name(raw_dataset)
+    backbone = args.cbl_path.split("/")[2]  
+    backbone = 'roberta' if 'roberta' in backbone else 'gpt2'
+    cbl_name = args.cbl_path.split("/")[-1] 
+    
     print("loading data...")
     test_dataset = load_dataset(dataset, split='test')
     print("test data len: ", len(test_dataset))
@@ -193,4 +204,5 @@ if __name__ == "__main__":
             else:
                 f.write("incorrect")
             f.write('\n')
+
             f.write('\n')
