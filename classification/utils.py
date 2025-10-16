@@ -69,7 +69,7 @@ def get_labels(n, d):
         return legal_labels(n)
     if d == "darklord1611/ecom_categories":
         return ecom_labels(n)
-    if d == "darklord1611/stackoverflow_question_ratings":
+    if d == "Duyacquy/Stack_overflow_question":
         return stack_over_flow_labels(n)
 
     raise(ValueError)
